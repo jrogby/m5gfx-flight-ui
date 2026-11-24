@@ -1,0 +1,19 @@
+name: build examples
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        example: [examples/embedded_fonts/embedded_fonts.ino, examples/pages/pages.ino]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install platformio
+      - run: >
+          pio ci ${{ matrix.example }} --lib . -b m5stack-core2
+          -O "build_flags=-std=gnu++17 -Wall -Wextra"
+          -O "build_unflags=-std=gnu++11"
+          -O "lib_deps=m5stack/M5Unified
+          mairas/ReactESP"

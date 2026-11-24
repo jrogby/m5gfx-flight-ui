@@ -1,0 +1,29 @@
+{
+  "name": "m5gfx-flight-ui",
+  "version": "0.1.0",
+  "description": "Aviation-style (Airbus ECAM / MCDU) GUI framework for M5Stack Core2/Tough: page manager with touch gestures, drawers, screensavers, embedded VLW fonts (no filesystem needed).",
+  "keywords": ["m5stack", "core2", "tough", "gui", "ecam", "mcdu", "aviation", "display", "touch", "fonts"],
+  "license": "MIT",
+  "authors": [{ "name": "Jonatan R. Lindberg", "maintainer": true }],
+  "repository": { "type": "git", "url": "https://github.com/jrogby/m5gfx-flight-ui.git" },
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "dependencies": {
+    "m5stack/M5GFX": "^0.2.0",
+    "m5stack/M5Unified": "^0.2.0",
+    "mairas/ReactESP": "^3.0.0"
+  },
+  "examples": [
+    { "name": "Embedded fonts", "base": "examples/embedded_fonts", "files": ["embedded_fonts.ino"] },
+    { "name": "Pages", "base": "examples/pages", "files": ["pages.ino"] }
+  ],
+  "export": {
+    "exclude": ["tools/__pycache__", ".github", "*.DS_Store"]
+  },
+  "build": {
+    "srcDir": "src",
+    "includeDir": "src",
+    "flags": ["-std=gnu++17"],
+    "unflags": ["-std=gnu++11"]
+  }
+}
