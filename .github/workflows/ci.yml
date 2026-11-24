@@ -15,5 +15,4 @@ jobs:
           pio ci ${{ matrix.example }} --lib . -b m5stack-core2
           -O "build_flags=-std=gnu++17 -Wall -Wextra"
           -O "build_unflags=-std=gnu++11"
-          -O "lib_deps=m5stack/M5Unified
-          mairas/ReactESP"
+          -O "lib_deps=m5stack/M5Unified, mairas/ReactESP"
