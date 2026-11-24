@@ -1,5 +1,7 @@
 # m5gfx-flight-ui
 
+[![build examples](https://github.com/jrogby/m5gfx-flight-ui/actions/workflows/ci.yml/badge.svg?event=status)](https://github.com/jrogby/m5gfx-flight-ui/actions/workflows/ci.yml)
+
 Aviation-style (Airbus ECAM / MCDU) GUI framework for M5Stack Core2 / Tough, built on M5GFX.
 
 - **DisplayManager**: page list, swipe navigation, touch gestures (tap, long press, swipe), redraw timing, screensaver.
