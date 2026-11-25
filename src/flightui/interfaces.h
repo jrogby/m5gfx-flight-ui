@@ -10,6 +10,7 @@ struct TouchEvent {
   enum Type : uint8_t { TAP, LONG_PRESS, SWIPE_UP, SWIPE_DOWN };
   Type type;
   int16_t x = 0, y = 0;  // touch point (TAP / LONG_PRESS), swipe start point
+  uint16_t speed = 0;    // SWIPE_*: finger speed in px/s (distance / time from finger down to swipe); 0 otherwise
 };
 
 

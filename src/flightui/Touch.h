@@ -24,6 +24,7 @@ struct Touch {
   bool _long_click = false;
   bool _short_click = false;
   int16_t x = 0, y = 0;  // point of the last tap / hold / swipe start
+  uint16_t speed = 0;    // last swipe: px/s from finger down until the swipe fired
 
   bool swiped_right() { return take(_right_swipe); }
   bool swiped_left()  { return take(_left_swipe); }
@@ -50,6 +51,7 @@ struct Touch {
       const int ax = abs(dx), ay = abs(dy);
       if (ax >= SWIPE_PX || ay >= SWIPE_PX) {
         x = _x0; y = _y0;
+        speed = (uint16_t)min<uint32_t>(65535, max(ax, ay) * 1000u / max<uint32_t>(1, now - _t0));
         if (ax >= ay) (dx > 0 ? _right_swipe : _left_swipe) = true;
         else          (dy > 0 ? _down_swipe : _up_swipe) = true;
         _used = true;

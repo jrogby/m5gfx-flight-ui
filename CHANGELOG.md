@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/), versions: [SemVer](http
 Before 1.0, minor versions may break the API.
 
 ## [Unreleased]
+### Added
+- `TouchEvent::speed`: swipe speed in px/s (SWIPE_UP/DOWN).
+- Meaning-based colors in `ui::color`: `EDITABLE`, `ACTIVE`, `LIMIT`, `TEMPORARY`, `REQUIRED`, `NEUTRAL` (Airbus MCDU convention, README "Colors").
+### Changed
+- `AIRBUS_YELLOW` calibrated to 240,230,0 (pure yellow looks greenish on the M5Tough panel).
 
 ## [0.1.0]
 ### Added

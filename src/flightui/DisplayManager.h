@@ -300,6 +300,7 @@ class DisplayManager {
   bool dispatch(TouchEvent::Type type) {
     if (!selected_page) return false;
     TouchEvent ev{type, touch.x, touch.y};
+    if (type == TouchEvent::SWIPE_UP || type == TouchEvent::SWIPE_DOWN) ev.speed = touch.speed;
     if (!selected_page->on_touch(ev)) return false;
     last_touch = millis();
     draw_selected_page();  // redraw now (same as a page change), not on the next tick

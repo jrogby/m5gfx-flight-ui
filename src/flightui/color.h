@@ -66,8 +66,16 @@ static constexpr u16 AIRBUS_BLUE   = color565(BASE_R_LOW, BASE_G_HIGH, BASE_B_FU
 static constexpr u16 AIRBUS_GREEN  = color565(BASE_R_OFF, BASE_G_FULL, BASE_B_OFF);
 static constexpr u16 AIRBUS_PURPLE = color565(BASE_R_FULL,BASE_G_OFF , BASE_B_FULL);
 static constexpr u16 AIRBUS_ORANGE = color565(242,158,52);
-static constexpr u16 AIRBUS_YELLOW = color565(BASE_R_FULL,BASE_G_FULL,BASE_B_OFF);
+static constexpr u16 AIRBUS_YELLOW = color565(240,230,0);  // calibrated on M5Tough vs real DU (pure 255,255,0 looks greenish)
 static constexpr u16 AIRBUS_RED    = color565(BASE_R_FULL,BASE_G_OFF,BASE_B_OFF);
+
+// Meaning-based colors (Airbus MCDU/ECAM convention). Pages pick by meaning, not by hue. See README "Colors".
+constexpr u16 EDITABLE  = AIRBUS_BLUE;    // cyan: value the user can change (knob, [ ] field), action prompts < >
+constexpr u16 ACTIVE    = AIRBUS_GREEN;   // current / active value, not editable here
+constexpr u16 LIMIT     = AIRBUS_PURPLE;  // magenta: limits, constraints, managed targets, value at its MIN/MAX
+constexpr u16 TEMPORARY = AIRBUS_YELLOW;  // changed but not yet confirmed/saved (like TMPY flight plan)
+constexpr u16 REQUIRED  = AIRBUS_ORANGE;  // amber: needs attention / required data missing (amber boxes), confirm
+constexpr u16 NEUTRAL   = ECAM_LABEL;     // white: labels, "---" no data, navigation prompts, scratchpad messages
 
 constexpr u16 LAMP_ERROR   = AIRBUS_RED;         // color565(228,50,22);   // Red
 constexpr u16 LAMP_OK      = AIRBUS_GREEN;       // color565(98,235,65);   // Green

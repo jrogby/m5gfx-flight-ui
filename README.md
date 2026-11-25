@@ -95,6 +95,24 @@ Honeywell MCDU (VLW) / FreeSans (GFX), and a warning is logged at `begin()`. A f
 `ui::icon_loader` draws tinted PNG icons (white on transparent) from a filesystem you mount yourself:
 `ui::icon_loader.init(LittleFS)`. The library never mounts or unmounts a filesystem.
 
+## Colors
+
+Pick colors by meaning (`ui::color::*`, `flightui/color.h`), following the Airbus MCDU/ECAM convention:
+
+| Name | Hue | Use for |
+|---|---|---|
+| `EDITABLE` | cyan | Values the user can change (knob, `[ ]` field); action prompts `<RST`, `INSERT*` |
+| `ACTIVE` | green | Current / active value, not editable on this page |
+| `LIMIT` | magenta | Limits, constraints, managed targets; a value at its MIN/MAX; a field's range |
+| `TEMPORARY` | yellow | Changed but not yet confirmed or saved (like a TMPY flight plan) |
+| `REQUIRED` | amber | Needs attention: confirm prompts, errors, required data missing (`□□□` amber boxes) |
+| `NEUTRAL` | white | Labels, `---` for no data, navigation prompts `<RETURN`/`NEXT>`, scratchpad messages |
+
+Symbols: `*` = armed / ready to execute, `•` = active item in a list, `+`/`-` = at or above / at or below,
+`/` separates paired values (`250/FL100`, range `5/100`).
+
+`AIRBUS_YELLOW` is calibrated on an M5Tough against a real display unit (240,230,0); pure 255,255,0 looks greenish on the panel.
+
 ## Logging
 
 Library logs go through `M5.Log` with tag `[ui]`. Set `ui::log_level` (default `ESP_LOG_INFO`).
