@@ -19,6 +19,15 @@
 /**
  * Page lifecycle, touch navigation, screensaver. No app globals: the app adds pages (add_page),
  * passes start page to begin(), screensaver via apply_screensaver(), and persists the page in on_page_settled.
+ *
+ * Navigation (with groups, set_groups() + add_page(page, name, group)):
+ * - swipe left/right: next/prev page within the current group (ring)
+ * - swipe up/down not handled by the page: next/prev group (last page shown in that group)
+ * - tap the title row (y < MENU_ZONE): page menu. Top row = group keys, below = the group's pages
+ *   (white < > = go to page, green = current). Tap a page to go there; swipe, long press, tap outside or timeout closes.
+ * - title row shows "n/m" top right (position within the group; put the group in the page title,
+ *   e.g. "N2K: DATA INSPECTOR"), the indicator line shows the same position.
+ * Without groups everything is one ring, as before.
  */
 
 class DisplayManager;
@@ -55,6 +64,26 @@ class DisplayManager {
   void add_page(IScreenPage* page) {
     page_collection.push_back(page);
   }
+  // Add with a short name (menu, persistence) and a group index into set_groups()
+  void add_page(IScreenPage* page, const char* name, uint8_t group = 0) {
+    page->name = name;
+    page->group = group;
+    add_page(page);
+  }
+
+  // Group names (menu keys, title label), index = IScreenPage::group. Pointers must stay valid (string literals).
+  void set_groups(std::initializer_list<const char*> names) { _groups.assign(names); }
+
+  // Page index by name, -1 if not found
+  int find_page(const char* name) const {
+    if (!name || !*name) return -1;
+    for (size_t i = 0; i < page_collection.size(); i++)
+      if (!strcmp(page_collection[i]->name, name)) return (int)i;
+    return -1;
+  }
+  const char* page_name(uint8_t i) const { return i < page_collection.size() ? page_collection[i]->name : ""; }
+  // Start page for setup() (call before the event loop runs setup, e.g. right after registering pages)
+  void set_start_page(uint8_t i) { _start_page = i; _settled_page = i; }
 
   /**
    * Remove a page from the display manager. The page will no longer be managed or included in navigation.
@@ -118,6 +147,14 @@ class DisplayManager {
   ulong total_draw_time = 0;
   ulong draw_count = 0;
   IScreensaver *screensaver = nullptr;
+  std::vector<const char*> _groups;
+  std::vector<uchar> _last_in_group;  // last page shown per group (group switch returns there)
+  bool _menu_open = false;
+  uint8_t _menu_group = 0;
+  ulong _menu_at = 0;
+  static constexpr int16_t MENU_ZONE = 24;           // tap above this y opens the menu
+  static constexpr ulong MENU_TIMEOUT_MS = 15000;
+  static constexpr int16_t MENU_KEY_H = 36, MENU_LIST_Y = 40;
   M5Canvas* _buf = nullptr;
   lgfx::LovyanGFX* _lcd = nullptr;
 
@@ -163,6 +200,8 @@ class DisplayManager {
 
   void select_page(uchar page_index) {
     if (page_index >= page_collection.size()) return;
+    if (_last_in_group.size() < group_count()) _last_in_group.assign(group_count(), 255);
+    _last_in_group[group_of(page_index)] = page_index;
     total_draw_time = 0;
     draw_count = 0;
     _lcd->fillScreen(TFT_BLACK);       // Clear actual LCD display
@@ -181,8 +220,48 @@ class DisplayManager {
     _event_loop->onDelay(0, [this]() { preload_neighbor_pages(); });
   }
 
-  uchar prev_index(uchar i) const { return i == 0 ? page_collection.size() - 1 : i - 1; }
-  uchar next_index(uchar i) const { return (i + 1) % page_collection.size(); }
+  // Groups: without set_groups() all pages are group 0 = one ring
+  uint8_t group_count() const { return _groups.empty() ? 1 : _groups.size(); }
+  uint8_t group_of(uchar i) const { return page_collection[i]->group < group_count() ? page_collection[i]->group : 0; }
+  const char* group_name(uint8_t g) const { return g < _groups.size() ? _groups[g] : ""; }
+  // Neighbours within the group of page i (ring); i itself if it is alone in its group
+  uchar step_in_group(uchar i, int dir) const {
+    const size_t n = page_collection.size();
+    for (size_t k = 1; k < n; k++) {
+      const uchar j = (uchar)((i + n + dir * (int)k) % n);
+      if (group_of(j) == group_of(i)) return j;
+    }
+    return i;
+  }
+  uchar prev_index(uchar i) const { return step_in_group(i, -1); }
+  uchar next_index(uchar i) const { return step_in_group(i, 1); }
+  // Position of page i within its group: index (0-based) and count
+  void group_pos(uchar i, uint8_t& pos, uint8_t& count) const {
+    pos = 0; count = 0;
+    for (uchar j = 0; j < page_collection.size(); j++) {
+      if (group_of(j) != group_of(i)) continue;
+      if (j == i) pos = count;
+      count++;
+    }
+  }
+  // First page of group g (or its last shown page), -1 if the group is empty
+  int entry_page(uint8_t g) const {
+    if (g < _last_in_group.size() && _last_in_group[g] < page_collection.size() && group_of(_last_in_group[g]) == g)
+      return _last_in_group[g];
+    for (uchar j = 0; j < page_collection.size(); j++) if (group_of(j) == g) return j;
+    return -1;
+  }
+  // Next/prev non-empty group
+  void navigate_group(int dir) {
+    const uint8_t gc = group_count();
+    if (gc < 2 || page_collection.empty()) return;
+    const uint8_t g0 = group_of(current_page);
+    for (uint8_t k = 1; k < gc; k++) {
+      const uint8_t g = (uint8_t)((g0 + gc + dir * k) % gc);
+      const int p = entry_page(g);
+      if (p >= 0) { select_page((uchar)p); return; }
+    }
+  }
   bool in_window(uchar i) const { return i == current_page || i == prev_index(current_page) || i == next_index(current_page); }
 
   // Free every page that is not current or a direct neighbour (keeps at most 3 pages allocated)
@@ -216,6 +295,10 @@ class DisplayManager {
   }
 
   void update_display() {
+    if (_menu_open) {
+      if (millis() - _menu_at >= MENU_TIMEOUT_MS) close_menu();
+      return;  // menu is static: drawn on open/change only
+    }
     bool ss_active = screensaver && screensaver->is_active();
     ulong page_millis = selected_page && selected_page->update_ms ? selected_page->update_ms : _slow_millis;
     if (!ss_active && (millis() - last_page_update >= page_millis)) {
@@ -241,6 +324,7 @@ class DisplayManager {
     if (_idle_timeout_ms > 0 && screensaver && millis() - last_touch >= _idle_timeout_ms) {
       screensaver->start();
     }
+    draw_group_label();
     if(measure_draw_time) {
       ulong draw_time = millis() - start_time;
       total_draw_time += draw_time;
@@ -252,7 +336,7 @@ class DisplayManager {
       _buf->setFont(&fonts::Font0);  // pages may also leave a GFX font set
       _buf->setTextDatum(TL_DATUM);
       _buf->setTextColor(ui::color::AIRBUS_BLUE, ui::color::ECAM_BG);
-      _buf->setCursor(284, 0);
+      _buf->setCursor(284, 232);  // bottom right: the title row has the group label
       _buf->printf("%lu ms", avg_draw_time);
     }
   }
@@ -261,20 +345,121 @@ class DisplayManager {
   uint16_t _ind_seg_end = 0;
   bool _ind_visible = false;
   static constexpr uint16_t IND_Y = 23;
-  static constexpr uint16_t IND_X0 = 10;
-  static constexpr uint16_t IND_X1 = 310;
+  static constexpr uint16_t IND_X0 = 40;   // = title line (drawers/Ecam.h TITLE_LINE_X0/X1)
+  static constexpr uint16_t IND_X1 = 280;
   static constexpr uint16_t IND_COLOR = lgfx::v1::color565(60, 80, 100);
 
-  void cache_indicator() {
-    _ind_visible = (page_collection.size() > 1 && selected_page && selected_page->has_title);
+  void cache_indicator() {  // segment = position within the current group
+    uint8_t pos, count;
+    group_pos(current_page, pos, count);
+    _ind_visible = (count > 1 && selected_page && selected_page->has_title);
     if (!_ind_visible) return;
     uint16_t total_w = IND_X1 - IND_X0;
-    uint16_t seg_w = total_w / page_collection.size();
-    _ind_seg_x = IND_X0 + current_page * seg_w;
-    _ind_seg_end = (current_page == page_collection.size() - 1) ? IND_X1 : _ind_seg_x + seg_w;
+    uint16_t seg_w = total_w / count;
+    _ind_seg_x = IND_X0 + pos * seg_w;
+    _ind_seg_end = (pos == count - 1) ? IND_X1 : _ind_seg_x + seg_w;
   }
 
-  // Subtle progress indicator overlaid on title separator line (y=23, x=10..310)
+  // "n/m" (position within the group) top right of the title row; the page title carries the group name
+  void draw_group_label() {
+    if (_groups.empty() || !selected_page || !selected_page->has_title) return;
+    uint8_t pos, count;
+    group_pos(current_page, pos, count);
+    if (count < 2) return;
+    char b[12];
+    snprintf(b, sizeof(b), "%u/%u", pos + 1, count);
+    _buf->loadFont(flightui::font::ECAMFontRegular12);
+    _buf->setTextDatum(TR_DATUM);
+    _buf->setTextColor(ui::color::NEUTRAL);
+    _buf->drawString(b, 316, 5);
+    _buf->setTextDatum(TL_DATUM);
+  }
+
+  // ---- page menu ----
+  // Pages of group g in registration order
+  uint8_t group_pages(uint8_t g, uchar* out, uint8_t max) const {
+    uint8_t n = 0;
+    for (uchar j = 0; j < page_collection.size() && n < max; j++) if (group_of(j) == g) out[n++] = j;
+    return n;
+  }
+  int16_t menu_row_h(uint8_t n) const {
+    const uint8_t rows = (n + 1) / 2;
+    return rows ? min<int16_t>(44, (240 - MENU_LIST_Y) / rows) : 44;
+  }
+
+  void open_menu() {
+    _menu_open = true;
+    _menu_group = group_of(current_page);
+    _menu_at = millis();
+    M5.Speaker.playWav(g_snd_click_select);
+    draw_menu();
+  }
+  void close_menu() {
+    _menu_open = false;
+    last_page_update = 0;  // redraw the page on the next tick
+    _lcd->fillScreen(TFT_BLACK);
+  }
+
+  void draw_menu() {
+    using namespace ui::color;
+    _buf->fillScreen(TFT_BLACK);
+    // Group keys (like the ECAM control panel page keys): current group green, others white
+    const uint8_t gc = group_count();
+    const int16_t kw = 320 / gc;
+    _buf->loadFont(flightui::font::ECAMFontRegular16);
+    _buf->setTextDatum(MC_DATUM);
+    for (uint8_t g = 0; g < gc; g++) {
+      const bool on = g == _menu_group;
+      _buf->drawRect(g * kw + 2, 2, kw - 4, MENU_KEY_H - 4, on ? ACTIVE : ECAM_ELEC_BG);
+      _buf->setTextColor(on ? ACTIVE : NEUTRAL);
+      _buf->drawString(_groups.empty() ? "PAGES" : group_name(g), g * kw + kw / 2, MENU_KEY_H / 2);
+    }
+    // Pages: two columns, left "<NAME", right "NAME>" (white = go to page), current page green without caret
+    uchar pages[32];
+    const uint8_t n = group_pages(_menu_group, pages, 32);
+    const int16_t rh = menu_row_h(n);
+    _buf->loadFont(flightui::font::ECAMFontRegular18);
+    char b[24];
+    for (uint8_t i = 0; i < n; i++) {
+      const bool right = i & 1;
+      const int16_t y = MENU_LIST_Y + (i / 2) * rh + rh / 2;
+      const bool cur = pages[i] == current_page;
+      const char* nm = page_collection[pages[i]]->name;
+      if (cur) snprintf(b, sizeof(b), "%s", nm);
+      else snprintf(b, sizeof(b), right ? "%s>" : "<%s", nm);
+      _buf->setTextColor(cur ? ACTIVE : NEUTRAL);
+      _buf->setTextDatum(right ? MR_DATUM : ML_DATUM);
+      _buf->drawString(b, right ? 314 : 6, y);
+    }
+    _buf->setTextDatum(TL_DATUM);
+    _buf->pushSprite(0, 0);
+  }
+
+  void handle_menu_touch() {
+    if (touch.swiped_left() || touch.swiped_right() || touch.swiped_up() || touch.swiped_down()) {
+      close_menu();
+      return;
+    }
+    if (!touch.short_pressed()) return;
+    _menu_at = millis();
+    const int16_t x = touch.x, y = touch.y;
+    if (y < MENU_KEY_H) {  // group key
+      const uint8_t g = (uint8_t)min<int>(x / (320 / group_count()), group_count() - 1);
+      if (g != _menu_group) { _menu_group = g; M5.Speaker.playWav(g_snd_click_forward); draw_menu(); }
+      return;
+    }
+    uchar pages[32];
+    const uint8_t n = group_pages(_menu_group, pages, 32);
+    const int16_t rh = menu_row_h(n);
+    const int idx = y >= MENU_LIST_Y ? ((y - MENU_LIST_Y) / rh) * 2 + (x >= 160 ? 1 : 0) : -1;
+    if (idx < 0 || idx >= n) { close_menu(); return; }  // outside the list
+    M5.Speaker.playWav(g_snd_click_select);
+    _menu_open = false;
+    select_page(pages[idx]);
+    last_touch = millis();
+  }
+
+  // Subtle progress indicator overlaid on title separator line (y=23, x=40..280)
   void draw_page_indicator() {
     if (!_ind_visible) return;
     _buf->drawLine(IND_X0, IND_Y, IND_X1, IND_Y, ui::color::ECAM_ELEC_BG);
@@ -290,6 +475,8 @@ class DisplayManager {
         last_touch = millis();
         select_page(current_page);
       }
+    } else if (_menu_open) {
+      handle_menu_touch();
     } else {
       handle_page_swipes();
       if (M5.Touch.getCount()) last_touch = millis();
@@ -310,9 +497,21 @@ class DisplayManager {
   }
 
   void handle_page_swipes() {
-    if (touch.swiped_up()) dispatch(TouchEvent::SWIPE_UP);
-    if (touch.swiped_down()) dispatch(TouchEvent::SWIPE_DOWN);
-    if (touch.short_pressed() && dispatch(TouchEvent::TAP)) M5.Speaker.playWav(g_snd_click_select);
+    // Up/down: the page first; unhandled = change group
+    if (touch.swiped_up() && !dispatch(TouchEvent::SWIPE_UP) && group_count() > 1) {
+      M5.Speaker.playWav(g_snd_click_forward);
+      navigate_group(1);
+      last_touch = millis();
+    }
+    if (touch.swiped_down() && !dispatch(TouchEvent::SWIPE_DOWN) && group_count() > 1) {
+      M5.Speaker.playWav(g_snd_click_back);
+      navigate_group(-1);
+      last_touch = millis();
+    }
+    if (touch.short_pressed()) {
+      if (touch.y < MENU_ZONE && page_collection.size() > 1) { open_menu(); last_touch = millis(); }
+      else if (dispatch(TouchEvent::TAP)) M5.Speaker.playWav(g_snd_click_select);
+    }
     if (touch.swiped_left()) {
       M5.Speaker.playWav(g_snd_click_forward);
       navigate_next_page();
@@ -326,6 +525,7 @@ class DisplayManager {
 
   void handle_long_clicks() {
     if (touch.long_pressed()) {
+      if (_menu_open) { close_menu(); return; }
       M5.Speaker.playWav(g_snd_click_select);
       last_touch = millis();
       if (!(screensaver && screensaver->is_active())) dispatch(TouchEvent::LONG_PRESS);
@@ -334,14 +534,12 @@ class DisplayManager {
 
   void navigate_next_page() {
     if (page_collection.empty()) return;
-    uchar next_page = (current_page + 1) % page_collection.size();
-    select_page(next_page);
+    select_page(next_index(current_page));  // within the group
   }
 
   void navigate_prev_page() {
     if (page_collection.empty()) return;
-    uchar prev_page = (current_page == 0) ? page_collection.size() - 1 : current_page - 1;
-    select_page(prev_page);
+    select_page(prev_index(current_page));
   }
 };
 

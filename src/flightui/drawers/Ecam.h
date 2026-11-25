@@ -33,6 +33,9 @@ struct Ecam {
 
   //   c.drawLine(10, y-1, 310, y-1, ui::color::ECAM_ELEC_BG);
   // }
+// Title separator line x range (240 px, centered); DisplayManager's page indicator uses the same
+static constexpr uint16_t TITLE_LINE_X0 = 40, TITLE_LINE_X1 = 280;
+
 void createPageTitle(M5Canvas &c, const String& title) {
     const uint16_t width = 320;
     const uint16_t height = 24;
@@ -49,7 +52,7 @@ void createPageTitle(M5Canvas &c, const String& title) {
     c.drawString(title_caps, x_center, 2);
 
     // Draw the line below the title
-    c.drawLine(10, height - 1, width - 10, height - 1, ui::color::ECAM_ELEC_BG);
+    c.drawLine(TITLE_LINE_X0, height - 1, TITLE_LINE_X1, height - 1, ui::color::ECAM_ELEC_BG);
 }
 
 void showAirbusPageTitle(M5Canvas &buf, String title) {

@@ -25,6 +25,8 @@ struct IScreenPage {
   virtual void kill() = 0;
 
   bool has_title = true; // pages with title separator get page indicator
+  const char* name = "";  // short name: page menu, start page persistence (set by DisplayManager::add_page(page, name, group))
+  uint8_t group = 0;      // page group: swipes left/right stay in the group, menu tabs (DisplayManager::set_groups)
   uint16_t update_ms = 0; // redraw interval for animated pages, 0 = DisplayManager default (slow)
 
   // Touch on this page. Return true when handled: the page is redrawn at once (button feedback).
